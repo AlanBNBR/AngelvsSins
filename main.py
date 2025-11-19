@@ -5,6 +5,7 @@ import random
 import math 
 import copy 
 import os
+import logging
 from settings import *
 from player import Player
 from projectile import Bullet, EnemyBullet
@@ -12,7 +13,16 @@ from enemy import Enemy, Boss
 from tile import Tile, Lava
 from map_data import MapGenerator
 from hud import HUD
-from menu import Menu 
+from menu import Menu
+from database import Database
+
+# CONFIG DO LOGGING
+logging.basicConfig(
+    filename='error.log', 
+    level=logging.ERROR, 
+    format='%(asctime)s - %(levelname)s - %(message)s',
+    datefmt='%Y-%m-%d %H:%M:%S'
+)
 
 # -------------------------------------------------------------
 # FUNÇÃO DE COLISÃO
@@ -84,6 +94,10 @@ class Game:
         self.game_state = 'menu' 
         self.menu = Menu(self.screen)
         
+        # --- DATABASE SETUP ---
+        self.db = Database() # Inicializa banco de dados
+        self.player_name = "" # Armazena o nome digitado
+        
         # --- AUDIO SETUP ---
         self.current_music_vol = MUSIC_VOLUME 
         self.current_sfx_vol = SFX_VOLUME
@@ -92,11 +106,9 @@ class Game:
         self.music_tracks = {
             'menu': 'audio/menu.mp3', 
             'game': ['audio/game2.mp3', 'audio/game1.mp3'],
-            'boss': 'audio/boss.ogg'  # <--- Adicionado Boss Music
+            'boss': 'audio/boss.ogg'
         }
-        
         self.play_music('menu', force_start=True)
-
         self.base_enemy_data = copy.deepcopy(ENEMIES_DATA)
         self.max_enemies = MAX_ENEMIES
         self.spawn_rate = ENEMY_SPAWN_RATE
@@ -318,8 +330,24 @@ class Game:
             for event in pygame.event.get():
                 if event.type == pygame.QUIT: pygame.quit(); sys.exit()
                 
-                if event.type == pygame.KEYDOWN:
-                    # MENU
+                # --- LÓGICA DE DIGITAÇÃO DE NOME ---
+                if self.game_state == 'name_input':
+                    if event.type == pygame.KEYDOWN:
+                        if event.key == pygame.K_RETURN:
+                            # Salva score e vai pro leaderboard
+                            final_name = self.player_name if self.player_name else "UNKNOWN"
+                            self.db.add_score(final_name, self.hud.score)
+                            self.player_name = "" # Reseta
+                            self.game_state = 'leaderboard' # Mostra o placar
+                        elif event.key == pygame.K_BACKSPACE:
+                            self.player_name = self.player_name[:-1]
+                        else:
+                            # Limita tamanho do nome a 10 caracteres
+                            if len(self.player_name) < 10 and event.unicode.isprintable():
+                                self.player_name += event.unicode
+
+                elif event.type == pygame.KEYDOWN:
+                    # MENU PRINCIPAL
                     if self.game_state == 'menu':
                         if event.key == pygame.K_UP:
                             self.menu.main_index = (self.menu.main_index - 1) % len(self.menu.main_options)
@@ -328,8 +356,14 @@ class Game:
                         elif event.key == pygame.K_RETURN:
                             choice = self.menu.main_options[self.menu.main_index]
                             if choice == 'PLAY': self.game_state = 'difficulty_select'
+                            elif choice == 'LEADERBOARD': self.game_state = 'leaderboard' # <--- Novo
                             elif choice == 'SETTINGS': self.game_state = 'settings'
                             elif choice == 'QUIT': pygame.quit(); sys.exit()
+
+                    # LEADERBOARD (Botão para voltar)
+                    elif self.game_state == 'leaderboard':
+                         if event.key == pygame.K_ESCAPE or event.key == pygame.K_RETURN:
+                             self.game_state = 'menu'
 
                     # SETTINGS
                     elif self.game_state == 'settings':
@@ -350,6 +384,7 @@ class Game:
 
                     # DIFFICULTY
                     elif self.game_state == 'difficulty_select':
+                        # ... (Lógica igual) ...
                         if event.key == pygame.K_UP:
                             self.menu.diff_index = (self.menu.diff_index - 1) % len(self.menu.difficulties)
                         elif event.key == pygame.K_DOWN:
@@ -367,18 +402,21 @@ class Game:
                     elif self.game_state == 'playing':
                         if event.key == pygame.K_RETURN: 
                             if not self.player.alive: 
-                                self.setup_map() 
-                                self.play_music('game')
+                                # MUDANÇA: Se morreu e apertou Enter, vai para digitar nome
+                                self.player_name = ""
+                                self.game_state = 'name_input' 
+                                self.play_music('menu') # Música volta pro menu
                         if event.key == pygame.K_ESCAPE: 
                             self.game_state = 'menu'
                             self.play_music('menu')
                     
                     # VICTORY
                     elif self.game_state == 'victory':
-                        if event.key == pygame.K_RETURN or event.key == pygame.K_ESCAPE:
-                            self.game_state = 'menu'
+                        if event.key == pygame.K_RETURN:
+                            # MUDANÇA: Se venceu e apertou Enter, vai para digitar nome
+                            self.player_name = ""
+                            self.game_state = 'name_input'
                             self.play_music('menu')
-                            self.setup_map()
 
             # DRAW & UPDATE
             if self.game_state == 'menu':
@@ -387,20 +425,26 @@ class Game:
                 self.menu.run('settings', self.current_music_vol, self.current_sfx_vol)
             elif self.game_state == 'difficulty_select':
                 self.menu.run('difficulty_select')
+            elif self.game_state == 'leaderboard':
+                # Busca scores atualizados
+                top_scores = self.db.get_top_scores()
+                self.menu.run('leaderboard', scores=top_scores)
+            elif self.game_state == 'name_input':
+                self.menu.run('name_input', current_name=self.player_name)
             elif self.game_state == 'playing':
                 self.visible_sprites.update()
                 self.enemy_bullet_sprites.update()
 
-                # TRIGGER DA BOSS FIGHT E MÚSICA
+                # TRIGGER DA BOSS FIGHT
                 if self.hud.score >= BOSS_TRIGGER_SCORE and not self.boss_fight_active:
                     self.start_boss_fight()
-                    self.play_music('boss') # <--- TOCA A MÚSICA AQUI
+                    self.play_music('boss')
 
                 if self.player.alive:
                     if not self.boss_fight_active:
                         self.enemy_spawner()
                     
-                    # Colisões de Tiros Player -> Inimigos
+                    # Colisões
                     hits = pygame.sprite.groupcollide(self.bullet_sprites, self.enemy_sprites, True, False, collided=collide_hitbox)
                     for bullet, hit_enemies in hits.items():
                         for enemy in hit_enemies:
@@ -408,18 +452,14 @@ class Game:
                             if enemy.health <= 0:
                                 enemy.kill()
                                 self.hud.add_score(enemy.stats['points'])
-                                
-                                # Lógica de Vitória
                                 if enemy.enemy_name == 'lucifer':
                                     print("LÚCIFER DERROTADO!")
                                     self.game_state = 'victory' 
                                     self.boss_fight_active = False
 
-                    # Colisões de Contato (Inimigo -> Player)
                     if pygame.sprite.spritecollide(self.player, self.enemy_sprites, False, collided=collide_hitbox):
                         self.player.die()
 
-                    # Colisões de Balas Inimigas -> Player
                     if pygame.sprite.spritecollide(self.player, self.enemy_bullet_sprites, True, collided=collide_hitbox):
                         self.player.die()
 
@@ -435,7 +475,6 @@ class Game:
                 self.hud.draw(self.player.current_ammo, self.player.is_reloading, self.player.weapon_index, self.player.alive) 
                 if self.player.alive: self.draw_crosshair()
             
-            # DRAW VICTORY
             elif self.game_state == 'victory':
                 self.visible_sprites.custom_draw(self.player)
                 self.hud.draw_victory_screen()
@@ -444,5 +483,12 @@ class Game:
             self.clock.tick(FPS)
 
 if __name__ == '__main__':
-    game = Game()
-    game.run()
+    try:
+        # Tenta rodar o jogo
+        game = Game()
+        game.run()
+    except Exception as e: # Pega o crash se acontecer
+        logging.critical("CRASH FATAL: Ocorreu um erro inesperado que fechou o jogo.", exc_info=True)
+        print("O jogo encontrou um erro fatal. Verifique error.log.")
+        pygame.quit()
+        sys.exit()

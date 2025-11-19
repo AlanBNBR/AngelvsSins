@@ -46,7 +46,7 @@ RELOAD_ICON_SIZE = 64
 RELOAD_ICON_POS = (WIDTH // 2, HEIGHT - 100)
 
 # --- BOSS SETTINGS ---
-BOSS_TRIGGER_SCORE = 10
+BOSS_TRIGGER_SCORE = 500
 
 # --- ARSENAL ---
 WEAPONS_DATA = {
@@ -89,15 +89,15 @@ ENEMIES_DATA = {
     
     # --- DADOS DO BOSS ---
     'lucifer': {
-        'health': 500, # Aumentei um pouco a vida para que ele dure mais e o jogador veja as fases
-        'speed': 1.0,   # Reduzi a velocidade um pouco para não ser um torpedo constante
+        'health': 500,
+        'speed': 1.0,
         'size': 120,    
         'color': (50, 0, 0), 
         'points': 10000,
-        'attack_cooldown': 4000, # Aumentei o cooldown geral para ter mais pausas entre ataques
-        'phase_2_threshold': 250, # Metade da vida total
-        'minion_spawn_cooldown': 10000, # NOVO: Cooldown para invocar minions
-        'dash_cooldown': 7000,         # NOVO: Cooldown para o ataque de Dash
+        'attack_cooldown': 4000,
+        'phase_2_threshold': 250,
+        'minion_spawn_cooldown': 10000,
+        'dash_cooldown': 7000,
         'weight': 0 
     }
 }
