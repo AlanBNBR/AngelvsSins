@@ -1,9 +1,10 @@
-# player.py
 import pygame
 import math
 import random
-import os # Necessário para verificar se o arquivo existe
-from settings import *
+import os
+import logging
+from settings import * 
+import settings
 from particles import Particle
 
 def draw_pixel_circle(surface, color, center, radius, alpha=255):
@@ -56,13 +57,13 @@ class Player(pygame.sprite.Sprite):
         self.visual_offset = pygame.math.Vector2(0, 0)
         self.weapon_pulse_value = 0
 
-        # --- CARREGAMENTO DE ÁUDIOS (NOVO) ---
+        # --- CARREGAMENTO DE ÁUDIOS ---
         # Estrutura: self.sounds['pistol']['shoot'] -> Sound Object
         self.sounds = {}
         self.load_weapon_sounds()
 
     def load_weapon_sounds(self):
-        print("--- Carregando SFX das Armas ---")
+        
         for weapon_name, data in WEAPONS_DATA.items():
             self.sounds[weapon_name] = {}
             actions = {
@@ -77,11 +78,13 @@ class Player(pygame.sprite.Sprite):
                     if os.path.exists(filename):
                         try:
                             sound_obj = pygame.mixer.Sound(filename)
-                            sound_obj.set_volume(SFX_VOLUME) # <--- USE A VARIÁVEL AQUI
-                        except pygame.error:
-                            print(f"Erro ao carregar som: {filename}")
+                            sound_obj.set_volume(settings.SFX_VOLUME)
+                        except pygame.error as e:
+                            # LOG DE ERRO DE CARREGAMENTO (Arquivo corrompido ou formato inválido)
+                            logging.error(f"ASSET ERROR - Erro ao decodificar som '{filename}': {e}")
                     else:
-                        print(f"Arquivo de som não encontrado: {filename}")
+                        # LOG DE ARQUIVO NÃO ENCONTRADO
+                        logging.warning(f"ASSET MISSING - Arquivo de som não encontrado: {filename}")
                 
                 self.sounds[weapon_name][action] = sound_obj
 
@@ -89,7 +92,7 @@ class Player(pygame.sprite.Sprite):
         """Toca o som da arma atual com o volume global atualizado"""
         sfx = self.sounds[self.weapon_index].get(action)
         if sfx:
-            sfx.set_volume(SFX_VOLUME) 
+            sfx.set_volume(settings.SFX_VOLUME) 
             sfx.play()
 
     @property
