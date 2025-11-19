@@ -1,5 +1,6 @@
 # Manual de Execução: Angel vs Sins
 Este manual descreve os pré-requisitos, o processo de instalação das dependências e como executar o jogo "Angel vs Sins".
+# Feito por: Alan, João Faé e Ronaldo
 # 1. Pré-requisitos
 Antes de iniciar, certifique-se de ter instalado em sua máquina:
 Python 3.10 ou superior: Baixar Python
